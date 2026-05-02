@@ -1,0 +1,100 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background-color: #0F0F1A;
+    color: #E2E8F0;
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+  }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: #1A1A2E; }
+  ::-webkit-scrollbar-thumb { background: #8B5CF6; border-radius: 3px; }
+}
+
+body.theme-light {
+  background-color: #f3f4f6;
+  color: #111827;
+}
+
+body.theme-light .bg-dark,
+body.theme-light .bg-dark-card,
+body.theme-light [class*="bg-[#1a1b1e]"],
+body.theme-light [class*="bg-[#2a2b2f]"] {
+  background-color: #ffffff !important;
+}
+
+body.theme-light .border-dark-border {
+  border-color: #d1d5db !important;
+}
+
+body.theme-light .text-white {
+  color: #111827 !important;
+}
+
+body.theme-light .text-gray-400,
+body.theme-light .text-gray-500,
+body.theme-light .text-gray-300 {
+  color: #4b5563 !important;
+}
+
+body.theme-light .bg-surface {
+  background-color: #e5e7eb !important;
+}
+
+body.theme-light .input {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+}
+
+body.theme-light .sidebar-link:hover,
+body.theme-light .card:hover {
+  background-color: #f9fafb;
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary hover:bg-primary-dark text-white font-semibold px-5 py-2.5 rounded-xl transition-all duration-200 hover:shadow-lg hover:shadow-primary/30 active:scale-95;
+  }
+  .btn-outline {
+    @apply border border-primary text-primary hover:bg-primary hover:text-white font-semibold px-5 py-2.5 rounded-xl transition-all duration-200;
+  }
+  .card {
+    @apply bg-dark-card border border-dark-border rounded-2xl p-5 transition-all duration-200 hover:border-primary/40;
+  }
+  .input {
+    @apply w-full bg-dark-card border border-dark-border rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/40 transition-all duration-200;
+  }
+  .glass {
+    @apply bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl;
+  }
+  .gradient-text {
+    @apply bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent;
+  }
+  .sidebar-link {
+    @apply flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:text-white hover:bg-surface transition-all duration-200 cursor-pointer;
+  }
+  .sidebar-link.active {
+    @apply text-white bg-primary/20 border border-primary/30;
+  }
+  .avatar {
+    @apply rounded-full object-cover bg-dark-border;
+  }
+  .badge {
+    @apply text-xs font-semibold px-2 py-0.5 rounded-full;
+  }
+}
+
+@layer utilities {
+  .text-gradient { background: linear-gradient(135deg, #8B5CF6, #F472B6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .glow-purple { box-shadow: 0 0 20px rgba(139, 92, 246, 0.4); }
+  .glow-pink   { box-shadow: 0 0 20px rgba(244, 114, 182, 0.4); }
+  .art-grid    { columns: 2; column-gap: 1rem; }
+  @media (min-width: 768px) { .art-grid { columns: 3; } }
+  @media (min-width: 1024px) { .art-grid { columns: 4; } }
+  .art-grid > * { break-inside: avoid; margin-bottom: 1rem; }
+}
