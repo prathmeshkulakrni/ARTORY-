@@ -22,7 +22,12 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' }
 }));
 
-// API Rate Limiting Setup
+// Trust proxy FIRST - must be before rate limiter on Render/cloud platforms
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
+// API Rate Limiting Setup (v8 requires validate config for proxy environments)
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 300,
@@ -32,14 +37,10 @@ const apiLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
 });
 
-// Trust proxy for Render, Netlify and other cloud platforms
-if (process.env.NODE_ENV === 'production') {
-  app.set('trust proxy', 1);
-}
-
-// Apply rate limiting to API routes (disabled in serverless environments to prevent request.ip validation crashes)
+// Apply rate limiting to API routes
 if (!process.env.NETLIFY) {
   app.use('/api', apiLimiter);
 }
