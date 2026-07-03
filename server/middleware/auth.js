@@ -10,24 +10,43 @@ const protect = async (req, res, next) => {
       req.user = await User.findById(decoded.id).select('-password');
       next();
     } catch (err) {
-      return res.status(401).json({ message: 'Not authorized, token failed' });
+      return res.status(401).json({ success: false, message: 'Not authorized, token failed' });
     }
   }
   if (!token) {
-    return res.status(401).json({ message: 'Not authorized, no token' });
+    return res.status(401).json({ success: false, message: 'Not authorized, no token' });
   }
 };
 
 const adminOnly = (req, res, next) => {
   if (!req.user) {
-    return res.status(401).json({ message: 'Not authorized' });
+    return res.status(401).json({ success: false, message: 'Not authorized' });
   }
 
   if (req.user.role !== 'admin') {
-    return res.status(403).json({ message: 'Admin access required' });
+    return res.status(403).json({ success: false, message: 'Admin access required' });
   }
 
   next();
 };
 
-module.exports = { protect, adminOnly };
+/**
+ * Flexible role-based authorization middleware.
+ * Usage: router.get('/secure', protect, authorizeRoles('admin', 'mentor'), controller);
+ */
+const authorizeRoles = (...roles) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'Not authorized' });
+    }
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: `Forbidden: Role '${req.user.role}' is not authorized to access this resource`
+      });
+    }
+    next();
+  };
+};
+
+module.exports = { protect, adminOnly, authorizeRoles };

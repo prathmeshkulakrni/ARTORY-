@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const { createArtwork, getFeed, getArtworkById, getByCategory, getByUser, likeArtwork, addComment, deleteArtwork, searchArtwork } = require('../controllers/artworkController');
+const { createArtwork, getFeed, getPublicFeed, getArtworkById, getByCategory, getByUser, likeArtwork, addComment, deleteArtwork, searchArtwork } = require('../controllers/artworkController');
 const { protect } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 
+router.get('/public', getPublicFeed); // no auth — used on landing page
 router.get('/feed', protect, getFeed);
 router.get('/search', protect, searchArtwork);
 router.get('/category/:cat', protect, getByCategory);

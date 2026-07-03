@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const Notification = require('../models/Notification');
+const { createNotification } = require('../utils/notify');
 
 // @POST /api/social/follow/:id
 const followUser = async (req, res) => {
@@ -18,7 +19,7 @@ const followUser = async (req, res) => {
       me.following.push(target._id);
       target.followers.push(me._id);
       if (target._id.toString() !== me._id.toString()) {
-        await Notification.create({
+        await createNotification(req, {
           recipient: target._id,
           sender: me._id,
           type: 'follow',

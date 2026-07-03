@@ -5,7 +5,20 @@ const notificationSchema = new mongoose.Schema({
   sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   type: {
     type: String,
-    enum: ['like', 'comment', 'follow', 'competition', 'community', 'mention', 'system'],
+    enum: [
+      'like',
+      'comment',
+      'follow',
+      'competition',
+      'community',
+      'mention',
+      'system',
+      'marketplace_application',
+      'marketplace_accepted',
+      'marketplace_message',
+      'marketplace_completed',
+      'marketplace_feedback',
+    ],
     required: true
   },
   message: { type: String, required: true },

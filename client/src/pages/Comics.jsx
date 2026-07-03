@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../services/api';
 import toast from 'react-hot-toast';
-import { BookOpen, Heart, Plus, X } from 'lucide-react';
+import { BookOpen, Heart, Plus, Search, X } from 'lucide-react';
 import ImageViewerModal from '../components/ImageViewerModal';
 import ReportButton from '../components/ReportButton';
 
@@ -14,6 +14,7 @@ export default function Comics() {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedComic, setSelectedComic] = useState(null);
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
     api.get('/comics').then(r => setComics(r.data)).catch(() => {}).finally(() => setLoading(false));
@@ -40,11 +41,25 @@ export default function Comics() {
     } catch {}
   };
 
+  const filteredComics = comics.filter(comic =>
+    comic.title?.toLowerCase().includes(query.trim().toLowerCase())
+  );
+
   return (
     <div className="animate-fade-in">
       <div className="flex justify-between items-center mb-8">
         <div><h1 className="text-3xl font-bold text-white">Comics</h1><p className="text-gray-400 mt-1">Read and publish comic series</p></div>
         <button onClick={()=>setShowCreate(!showCreate)} className="btn-primary flex items-center gap-2">{showCreate?<><X size={18}/> Cancel</>:<><Plus size={18}/> Publish</>}</button>
+      </div>
+
+      <div className="relative mb-8">
+        <Search size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-500" />
+        <input
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          className="w-full bg-surface/30 border border-white/10 rounded-2xl pl-14 pr-5 py-4 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-primary/50"
+          placeholder="Search comics by name..."
+        />
       </div>
 
       {showCreate && (
@@ -58,9 +73,9 @@ export default function Comics() {
       )}
 
       {loading ? <div className="flex justify-center py-20"><div className="w-10 h-10 border-3 border-primary/30 border-t-primary rounded-full animate-spin"/></div>
-      : comics.length===0 ? <div className="text-center py-20 card"><p className="text-5xl mb-3">📚</p><p className="text-gray-400">No comics yet</p></div>
+      : filteredComics.length===0 ? <div className="text-center py-20 card"><p className="text-5xl mb-3">📚</p><p className="text-gray-400">No comics yet</p></div>
       : <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {comics.map(c=>(
+          {filteredComics.map(c=>(
             <div key={c._id} className="card group hover:border-accent/40 cursor-pointer" onClick={() => setSelectedComic({ ...c, artist: c.creator, imageUrl: c.coverImage })}>
               <div className="aspect-[3/4] rounded-xl overflow-hidden mb-4 bg-dark-border">
                 {c.coverImage ? <img src={c.coverImage.startsWith('http')?c.coverImage:`${API_BASE}${c.coverImage}`} alt={c.title} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"/> : <div className="w-full h-full flex items-center justify-center"><BookOpen size={48} className="text-gray-600"/></div>}

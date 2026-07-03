@@ -1,6 +1,5 @@
 const Competition = require('../models/Competition');
-const Notification = require('../models/Notification');
-const path = require('path');
+const { createNotification } = require('../utils/notify');
 
 const createCompetition = async (req, res) => {
   try {
@@ -65,6 +64,13 @@ const joinCompetition = async (req, res) => {
     }
     comp.participants.push(req.user._id);
     await comp.save();
+    await createNotification(req, {
+      recipient: comp.organizer,
+      sender: req.user._id,
+      type: 'competition',
+      message: `${req.user.username} joined "${comp.title}"`,
+      link: '/competitions',
+    });
     res.json({ message: 'Joined successfully', participantsCount: comp.participants.length });
   } catch (err) { res.status(500).json({ message: err.message }); }
 };
@@ -86,6 +92,13 @@ const submitImage = async (req, res) => {
     const imageUrl = `/uploads/${req.file.filename}`;
     comp.submissions.push({ artist: req.user._id, imageUrl });
     await comp.save();
+    await createNotification(req, {
+      recipient: comp.organizer,
+      sender: req.user._id,
+      type: 'competition',
+      message: `${req.user.username} submitted artwork for "${comp.title}"`,
+      link: '/competitions',
+    });
     res.json({ message: 'Submitted successfully' });
   } catch (err) { res.status(500).json({ message: err.message }); }
 };
@@ -115,7 +128,7 @@ const pickWinners = async (req, res) => {
 
     // Notify winners
     for (const w of builtWinners) {
-      await Notification.create({
+      await createNotification(req, {
         recipient: w.artist,
         sender: req.user._id,
         type: 'competition',
@@ -137,7 +150,7 @@ const approveCompetition = async (req, res) => {
     if (!['approved', 'rejected'].includes(status)) return res.status(400).json({ message: 'Invalid status' });
     comp.status = status;
     await comp.save();
-    await Notification.create({
+    await createNotification(req, {
       recipient: comp.organizer,
       sender: req.user._id,
       type: 'competition',

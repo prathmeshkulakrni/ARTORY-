@@ -9,10 +9,7 @@ const ADMIN_PASSWORD = 'Admin@123';
 
 async function seedAdmin() {
   try {
-    await mongoose.connect(process.env.MONGO_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
+    await mongoose.connect(process.env.MONGO_URI);
 
     const hashedPassword = await bcrypt.hash(ADMIN_PASSWORD, 10);
     const existingAdmin = await User.findOne({

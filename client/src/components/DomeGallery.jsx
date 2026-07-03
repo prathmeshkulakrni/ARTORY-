@@ -140,7 +140,7 @@ export default function DomeGallery({
   const movedRef = useRef(false);
   const inertiaRAF = useRef(null);
   const openingRef = useRef(false);
-  const openStartedAtRef = useRef(0);
+  const openReadAtRef = useRef(0);
   const lastDragEndAt = useRef(0);
 
   const scrollLockedRef = useRef(false);
@@ -349,7 +349,7 @@ export default function DomeGallery({
     const scrim = scrimRef.current;
     if (!scrim) return;
     const close = () => {
-      if (performance.now() - openStartedAtRef.current < 250) return;
+      if (performance.now() - openReadAtRef.current < 250) return;
       const el = focusedElRef.current;
       if (!el) return;
       const parent = el.parentElement;
@@ -450,7 +450,7 @@ export default function DomeGallery({
     el => {
       if (openingRef.current) return;
       openingRef.current = true;
-      openStartedAtRef.current = performance.now();
+      openReadAtRef.current = performance.now();
       lockScroll();
       const parent = el.parentElement;
       focusedElRef.current = el;

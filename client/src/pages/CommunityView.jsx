@@ -6,12 +6,35 @@ import { useSocket } from '../context/SocketContext';
 import toast from 'react-hot-toast';
 import {
   Users, Trash2, Image as ImageIcon, ArrowLeft, Plus, X,
-  MessageCircle, Lock, Globe, Edit3, Check, UserCheck, UserX, Send, CornerUpLeft
+  MessageCircle, Lock, Globe, Edit3, Check, UserCheck, UserX, Send, CornerUpLeft, Shield, Info, Palette, LayoutGrid, Zap, BadgeCheck, Camera, MoreVertical, Heart, Share2, Target, LogOut, Paperclip, Smile
 } from 'lucide-react';
 import ImageViewerModal from '../components/ImageViewerModal';
 import ReportButton from '../components/ReportButton';
+import CreatePostModal from '../components/CreatePostModal';
 
-const API_BASE = 'http://localhost:5000';
+const API_BASE = import.meta.env.VITE_API_URL?.replace('/api','') || 'http://localhost:5000';
+const mediaSrc = (path, version) => {
+  if (!path) return '';
+  const src = path.startsWith('http') ? path : `${API_BASE}${path}`;
+  return version ? `${src}${src.includes('?') ? '&' : '?'}v=${encodeURIComponent(version)}` : src;
+};
+
+function ChatReplyPreview({ replyTo, onCancel }) {
+  if (!replyTo) return null;
+  return (
+    <div className="mx-6 mb-3 px-5 py-4 bg-primary/5 border-l-[6px] border-primary rounded-[1.5rem] flex items-start justify-between gap-4 animate-slide-up backdrop-blur-3xl shadow-xl border border-white/5">
+      <div className="min-w-0">
+        <p className="text-[9px] text-primary font-black uppercase tracking-[0.3em] mb-1.5 flex items-center gap-2">
+           <CornerUpLeft size={10}/> Targeting Response to {replyTo.senderName}
+        </p>
+        <p className="text-xs text-gray-400 truncate font-medium italic opacity-80 leading-relaxed">{replyTo.message}</p>
+      </div>
+      <button onClick={onCancel} className="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center text-gray-500 hover:text-white transition-all hover:bg-white/10 shadow-inner">
+         <X size={14}/>
+      </button>
+    </div>
+  );
+}
 
 export default function CommunityView() {
   const { id } = useParams();
@@ -26,16 +49,15 @@ export default function CommunityView() {
 
   // Admin states
   const [coverFile, setCoverFile] = useState(null);
+  const [coverPreview, setCoverPreview] = useState('');
   const [showEdit, setShowEdit] = useState(false);
   const [editForm, setEditForm] = useState({ name: '', description: '', isPrivate: false });
 
   // Join requests (admin)
   const [joinRequests, setJoinRequests] = useState([]);
 
-  // Post states
-  const [postForm, setPostForm] = useState({ title: '', description: '' });
-  const [postFile, setPostFile] = useState(null);
-  const [showPostForm, setShowPostForm] = useState(false);
+  // Post modal state
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   // Community chat
   const [chatMessages, setChatMessages] = useState([]);
@@ -51,7 +73,7 @@ export default function CommunityView() {
         setEditForm({ name: r.data.name, description: r.data.description, isPrivate: r.data.isPrivate });
       }
     } catch {
-      if (isMounted()) { toast.error('Failed to load community'); navigate('/community', { replace: true }); }
+      if (isMounted()) { toast.error('Failed to load art group'); navigate('/community', { replace: true }); }
     } finally {
       if (isMounted()) setLoading(false);
     }
@@ -63,7 +85,12 @@ export default function CommunityView() {
     return () => { active = false; };
   }, [id]);
 
-  // Community chat socket
+  useEffect(() => {
+    return () => {
+      if (coverPreview) URL.revokeObjectURL(coverPreview);
+    };
+  }, [coverPreview]);
+
   useEffect(() => {
     if (!socket || !id) return;
     socket.emit('join_community_room', id);
@@ -73,9 +100,8 @@ export default function CommunityView() {
     return () => { socket.off('receive_community_message'); };
   }, [socket, id]);
 
-  // Load chat history when chat tab is opened
   useEffect(() => {
-    if (activeTab === 'chat') {
+    if (activeTab === 'chat' && isMember) {
       api.get(`/community/${id}/messages`)
         .then(r => setChatMessages(r.data))
         .catch(() => {});
@@ -84,7 +110,6 @@ export default function CommunityView() {
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages]);
 
-  // Load join requests when admin opens the requests tab
   useEffect(() => {
     if (activeTab === 'requests' && isAdmin) {
       api.get(`/community/${id}/join-requests`)
@@ -98,6 +123,7 @@ export default function CommunityView() {
   const posts = Array.isArray(community?.posts) ? community.posts.filter(Boolean) : [];
   const isAdmin = creatorId === user?._id;
   const isMember = members.some((m) => (m?._id || m) === user?._id);
+  const isAdultUser = Number(user?.age) >= 18 || user?.role === 'admin';
 
   const hasPendingRequest = community?.joinRequests?.some(
     r => (r.user?._id || r.user) === user?._id
@@ -107,34 +133,34 @@ export default function CommunityView() {
     try {
       const r = await api.post(`/community/${id}/join`);
       if (r.data.requested) {
-        toast.success('Join request sent! Waiting for admin approval.');
+        toast.success('Join request sent!');
       } else if (r.data.cancelled) {
-        toast.success('Join request cancelled.');
+        toast.success('Join request canceled.');
       } else if (r.data.joined) {
-        toast.success('Joined community!');
+        toast.success('Group created!');
       } else {
-        toast.success('Left community');
+        toast.success('Join request canceled');
       }
       fetchCommunity();
-    } catch { toast.error('Failed to update membership'); }
+    } catch { toast.error('Could not send join request'); }
   };
 
   const handleDelete = async () => {
-    if (!window.confirm('Are you sure you want to delete this community?')) return;
+    if (!window.confirm('Are you sure you want to dismantle this group?')) return;
     try {
       await api.delete(`/community/${id}`);
-      toast.success('Community deleted');
+      toast.success('Group dismantled');
       navigate('/community');
-    } catch { toast.error('Failed to delete'); }
+    } catch { toast.error('Dismantling sequence failed'); }
   };
 
   const handleRemoveMember = async (memberId) => {
-    if (!window.confirm('Remove this member?')) return;
+    if (!window.confirm('Leave this artist?')) return;
     try {
       await api.post(`/community/${id}/remove-member`, { memberId });
       toast.success('Member removed');
       fetchCommunity();
-    } catch { toast.error('Failed to remove member'); }
+    } catch { toast.error('Decoupling failed'); }
   };
 
   const handleUpdateImages = async () => {
@@ -142,11 +168,14 @@ export default function CommunityView() {
     const fd = new FormData();
     fd.append('coverImage', coverFile);
     try {
-      await api.put(`/community/${id}/images`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-      toast.success('Cover updated');
-      fetchCommunity();
+      const { data } = await api.put(`/community/${id}/images`, fd);
+      setCommunity(prev => ({ ...(prev || {}), ...data }));
+      toast.success('Group cover updated');
       setCoverFile(null);
-    } catch { toast.error('Failed to update cover'); }
+      if (coverPreview) URL.revokeObjectURL(coverPreview);
+      setCoverPreview('');
+      fetchCommunity();
+    } catch { toast.error('Update failed'); }
   };
 
   const handleEditSave = async () => {
@@ -156,37 +185,29 @@ export default function CommunityView() {
         description: editForm.description,
         isPrivate: editForm.isPrivate,
       });
-      toast.success('Community updated!');
+      toast.success('Art group reconfigured!');
       setShowEdit(false);
       fetchCommunity();
-    } catch (err) { toast.error(err.response?.data?.message || 'Failed to update'); }
+    } catch (err) { toast.error(err.response?.data?.message || 'Reconfiguration failed'); }
   };
 
   const handleJoinRequest = async (userId, action) => {
     try {
       await api.post(`/community/${id}/join-requests/${userId}/handle`, { action });
-      toast.success(action === 'accept' ? 'Member accepted!' : 'Request rejected');
+      toast.success(action === 'accept' ? 'Member integrated!' : 'Request rejected');
       setJoinRequests(prev => prev.filter(r => (r.user?._id || r.user) !== userId));
       if (action === 'accept') fetchCommunity();
-    } catch { toast.error('Failed to handle request'); }
+    } catch { toast.error('Sequence error'); }
   };
 
-  const handleCreatePost = async (e) => {
-    e.preventDefault();
-    if (!postFile) return toast.error('Image is required');
-    const fd = new FormData();
-    fd.append('title', postForm.title);
-    fd.append('description', postForm.description);
-    fd.append('image', postFile);
-    try {
-      const artworkRes = await api.post('/artwork', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-      await api.post(`/community/${id}/post`, { artworkId: artworkRes.data._id });
-      toast.success('Post added!');
-      setShowPostForm(false);
-      setPostForm({ title: '', description: '' });
-      setPostFile(null);
-      fetchCommunity();
-    } catch { toast.error('Failed to create post'); }
+  // handleCreatePost is now handled inside CreatePostModal
+
+  const handleArtworkDeleted = (artworkId) => {
+    setSelectedArtwork(null);
+    setCommunity(prev => prev
+      ? { ...prev, posts: (prev.posts || []).filter(post => post?._id !== artworkId) }
+      : prev
+    );
   };
 
   const handleSendChatMsg = async (e) => {
@@ -207,305 +228,465 @@ export default function CommunityView() {
       setChatMessages(prev => [...prev, res.data]);
       setChatMsg('');
       setChatReplyTo(null);
-    } catch { toast.error('Failed to send message'); }
+    } catch { toast.error('Message failed'); }
   };
 
   const tabs = ['feed', 'chat', 'members', ...(isAdmin ? ['requests'] : [])];
 
   if (loading) return (
-    <div className="flex justify-center py-20">
-      <div className="w-10 h-10 border-3 border-primary/30 border-t-primary rounded-full animate-spin" />
+    <div className="flex flex-col items-center justify-center py-40 space-y-8">
+      <div className="w-16 h-16 border-4 border-primary/20 border-t-primary rounded-full animate-spin shadow-[0_0_30px_rgba(124,58,237,0.3)]"/>
+      <p className="text-gray-600 font-black text-[10px] tracking-[0.5em] uppercase animate-pulse">Starting Art Feed...</p>
     </div>
   );
   if (!community) return null;
 
   return (
-    <div className="max-w-5xl mx-auto animate-fade-in">
-      <button onClick={() => navigate('/community')} className="mb-4 flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
-        <ArrowLeft size={20} /> Back to Communities
+    <div className="max-w-7xl mx-auto animate-fade-in pb-32 px-6 lg:px-8 selection:bg-primary selection:text-white">
+      <button onClick={() => navigate('/community')} className="mb-10 flex items-center gap-3 text-gray-500 hover:text-white transition-all group/back">
+        <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center border border-white/5 group-hover/back:border-primary/40 group-hover/back:text-primary transition-all">
+           <ArrowLeft size={20} />
+        </div>
+        <span className="text-[10px] font-black uppercase tracking-[0.3em]">Back to Community</span>
       </button>
 
-      {/* Header */}
-      <div className="card p-0 overflow-hidden mb-6">
-        <div className="h-48 bg-gradient-to-r from-primary/30 to-accent/30 relative">
-          {community?.coverImage && (
-            <img src={`${API_BASE}${community.coverImage}`} alt="Cover" className="w-full h-full object-cover" />
+      {/* Cinematic Header */}
+      <div className="bg-dark-card border border-white/5 rounded-[4rem] overflow-hidden shadow-[0_60px_120px_-30px_rgba(0,0,0,0.8)] mb-12 relative group/hdr">
+        <div className="h-80 relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-t from-[#0c0d0f] via-[#0c0d0f]/40 to-transparent z-10" />
+          {coverPreview || community?.coverImage ? (
+            <img src={coverPreview || mediaSrc(community.coverImage, community.updatedAt)} alt="Cover" className="w-full h-full object-cover transition-transform duration-1000 group-hover/hdr:scale-105" />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-primary/20 via-surface to-accent/20" />
           )}
+          
           {isAdmin && (
-            <div className="absolute top-4 right-4 bg-black/60 p-2 rounded-lg backdrop-blur-md flex items-center gap-2">
-              <label className="cursor-pointer flex items-center gap-2 text-sm text-white hover:text-primary transition-colors">
-                <ImageIcon size={16} /> Change Cover
-                <input type="file" className="hidden" accept="image/*" onChange={(e) => setCoverFile(e.target.files[0])} />
+            <div className="absolute top-8 right-8 z-20 flex items-center gap-4">
+              <label className="h-14 px-8 rounded-2xl bg-black/60 backdrop-blur-3xl border border-white/10 flex items-center gap-4 text-xs font-black text-white uppercase tracking-widest hover:bg-primary transition-all cursor-pointer shadow-2xl">
+                <Camera size={20} /> Change Architecture
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setCoverFile(file);
+                    if (coverPreview) URL.revokeObjectURL(coverPreview);
+                    setCoverPreview(URL.createObjectURL(file));
+                  }}
+                />
               </label>
-              {coverFile && <button onClick={handleUpdateImages} className="btn-primary text-xs py-1 px-2">Save</button>}
+              {coverFile && (
+                <button onClick={handleUpdateImages} className="h-14 px-8 rounded-2xl bg-green-500 text-white font-black uppercase tracking-widest shadow-xl shadow-green-500/20 hover:scale-105 active:scale-95 transition-all">Save Changes</button>
+              )}
             </div>
           )}
         </div>
 
-        <div className="p-6">
-          <div className="flex justify-between items-start flex-wrap gap-4">
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-2">
-                <h1 className="text-3xl font-bold text-white">{community?.name || 'Community'}</h1>
-                {community?.isPrivate
-                  ? <span className="flex items-center gap-1 text-xs text-orange-400 bg-orange-400/10 px-2 py-1 rounded-full"><Lock size={12}/> Private</span>
-                  : <span className="flex items-center gap-1 text-xs text-green-400 bg-green-400/10 px-2 py-1 rounded-full"><Globe size={12}/> Public</span>
+        <div className="p-12 -mt-24 relative z-20">
+          <div className="flex flex-col lg:flex-row justify-between items-end gap-10">
+            <div className="flex-1 space-y-6">
+              <div className="flex items-center gap-4 flex-wrap">
+                 <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                 <h1 className="text-5xl lg:text-6xl font-black text-white tracking-tighter leading-none">{community?.name}</h1>
+                 {community?.isPrivate
+                  ? <span className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-accent bg-accent/10 px-4 py-2 rounded-2xl backdrop-blur-3xl border border-accent/20"><Lock size={12}/> Encrypted</span>
+                  : <span className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-primary bg-primary/10 px-4 py-2 rounded-2xl backdrop-blur-3xl border border-primary/20"><Globe size={12}/> Open Hub</span>
                 }
               </div>
-              <span className="badge bg-primary/20 text-primary mb-3 inline-block">{community?.category || 'General'}</span>
-              <p className="text-gray-300 max-w-2xl">{community?.description || 'No description yet.'}</p>
+              <div className="flex items-center gap-4">
+                 <span className="px-5 py-2 rounded-xl bg-primary/10 text-primary text-[10px] font-black uppercase tracking-[0.3em] border border-primary/20">{community?.category || 'General'}</span>
+                 <div className="h-4 w-px bg-white/10" />
+                 <div className="flex items-center gap-3 text-gray-500">
+                    <Users size={16} />
+                    <span className="text-[10px] font-black uppercase tracking-widest">{members.length} Artists</span>
+                 </div>
+              </div>
+              <p className="text-gray-400 text-lg font-medium max-w-3xl leading-relaxed">{community?.description || 'A friendly art group for sharing work and ideas.'}</p>
             </div>
 
-            <div className="flex flex-col items-end gap-3">
+            <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto">
               {isAdmin ? (
                 <>
-                  <button onClick={() => setShowEdit(!showEdit)} className="flex items-center gap-2 px-5 py-2 rounded-xl font-semibold bg-primary/20 text-primary hover:bg-primary hover:text-white transition-all">
-                    <Edit3 size={16}/> Edit Community
+                  <button onClick={() => setShowEdit(!showEdit)} className="w-full sm:w-auto h-16 px-10 rounded-2xl bg-gradient-to-br from-primary to-accent text-white font-black text-[11px] uppercase tracking-[0.3em] shadow-xl shadow-primary/20 hover:shadow-primary/40 hover:-translate-y-1 active:scale-95 transition-all flex items-center justify-center gap-4">
+                    <Edit3 size={20}/> Reconfigure
                   </button>
-                  <button onClick={handleDelete} className="flex items-center gap-2 text-sm text-red-400 hover:text-red-300 transition-colors">
-                    <Trash2 size={16}/> Delete Community
+                  <button onClick={handleDelete} className="w-full sm:w-auto h-16 px-10 rounded-2xl bg-red-500/10 text-red-500 border border-red-500/20 font-black text-[11px] uppercase tracking-[0.3em] hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-4 group/del">
+                    <Trash2 size={20} className="group-hover/del:rotate-12 transition-transform" /> Dismantle
                   </button>
                 </>
               ) : (
                 <>
-                  <button onClick={handleJoin} className={`px-6 py-2 rounded-xl font-bold transition-all ${
-                    isMember ? 'bg-dark-border text-gray-300 hover:bg-red-500/20 hover:text-red-400'
-                    : hasPendingRequest ? 'bg-orange-400/10 text-orange-400 hover:bg-orange-400/20'
-                    : 'bg-primary text-white hover:bg-primary-hover'
+                  <button onClick={handleJoin} className={`w-full sm:w-auto h-16 px-12 rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-4 shadow-2xl active:scale-95 ${
+                    isMember ? 'bg-surface/60 text-gray-400 hover:bg-red-500 hover:text-white border border-white/5'
+                    : hasPendingRequest ? 'bg-accent/10 text-accent border border-accent/20'
+                    : 'bg-gradient-to-r from-primary to-accent text-white shadow-primary/30 hover:shadow-primary/50 hover:-translate-y-1'
                   }`}>
-                    {isMember ? 'Leave Community' : hasPendingRequest ? 'Cancel Request' : 'Join Community'}
+                    {isMember ? <><LogOut size={20}/> Leave Group</> : hasPendingRequest ? <><Zap size={20} className="animate-pulse"/> Pending</> : <><Zap size={20}/> Join Group</>}
                   </button>
-                  <ReportButton targetType="community" targetId={community._id} compact />
+                  <div className="flex items-center gap-4">
+                     <button className="h-16 w-16 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center text-gray-500 hover:text-primary transition-all">
+                        <Share2 size={24} />
+                     </button>
+                     <ReportButton targetType="community" targetId={community._id} />
+                  </div>
                 </>
               )}
             </div>
           </div>
 
-          {/* Admin Edit Panel */}
+          {/* Reconfiguration Panel */}
           {isAdmin && showEdit && (
-            <div className="mt-5 p-5 bg-dark rounded-xl border border-dark-border space-y-4 animate-slide-up">
-              <h3 className="font-bold text-white flex items-center gap-2"><Edit3 size={16}/> Edit Community</h3>
-              <input
-                value={editForm.name}
-                onChange={e => setEditForm({...editForm, name: e.target.value})}
-                placeholder="Community name"
-                className="input"
-              />
-              <textarea
-                value={editForm.description}
-                onChange={e => setEditForm({...editForm, description: e.target.value})}
-                placeholder="Description"
-                className="input h-20 resize-none"
-              />
-              <div className="flex items-center gap-4">
-                <span className="text-gray-400 text-sm font-medium">Privacy:</span>
-                <button
-                  onClick={() => setEditForm({...editForm, isPrivate: false})}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${!editForm.isPrivate ? 'bg-green-500/20 text-green-400 border border-green-500/40' : 'text-gray-500 hover:text-gray-300'}`}
-                >
-                  <Globe size={14}/> Public
-                </button>
-                <button
-                  onClick={() => setEditForm({...editForm, isPrivate: true})}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${editForm.isPrivate ? 'bg-orange-400/20 text-orange-400 border border-orange-400/40' : 'text-gray-500 hover:text-gray-300'}`}
-                >
-                  <Lock size={14}/> Private
-                </button>
+            <div className="mt-12 p-10 bg-[#0c0d0f] rounded-[3rem] border-2 border-white/10 space-y-8 animate-slide-up relative overflow-hidden">
+               <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full -mr-32 -mt-32 blur-3xl pointer-events-none" />
+              <h3 className="text-xl font-black text-white flex items-center gap-4 uppercase tracking-tighter"><Edit3 size={20} className="text-primary"/> Group Configuration</h3>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 relative z-10">
+                <div className="space-y-4">
+                   <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] ml-2">Art Name</label>
+                   <input value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="w-full bg-dark/60 border-2 border-white/5 rounded-[1.5rem] px-8 py-5 text-sm font-black text-white focus:border-primary/50 transition-all" placeholder="Group name"/>
+                </div>
+                <div className="space-y-4">
+                   <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] ml-2">Privacy</label>
+                   <div className="flex bg-dark/60 p-2 rounded-2xl border-2 border-white/5 shadow-inner">
+                      <button onClick={() => setEditForm({...editForm, isPrivate: false})} className={`flex-1 flex items-center justify-center gap-3 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!editForm.isPrivate ? 'bg-primary text-white shadow-xl' : 'text-gray-500 hover:text-white'}`}>
+                        <Globe size={16}/> Open
+                      </button>
+                      <button onClick={() => setEditForm({...editForm, isPrivate: true})} className={`flex-1 flex items-center justify-center gap-3 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${editForm.isPrivate ? 'bg-accent text-white shadow-xl' : 'text-gray-500 hover:text-white'}`}>
+                        <Lock size={16}/> Encrypted
+                      </button>
+                   </div>
+                </div>
+                <div className="lg:col-span-2 space-y-4">
+                   <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] ml-2">Mission Statement</label>
+                   <textarea value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} className="w-full bg-dark/60 border-2 border-white/5 rounded-[2rem] px-8 py-6 text-sm font-medium text-white focus:border-primary/50 transition-all h-32 resize-none leading-relaxed" placeholder="Description"/>
+                </div>
               </div>
-              <div className="flex gap-3">
-                <button onClick={handleEditSave} className="btn-primary flex items-center gap-2"><Check size={16}/> Save Changes</button>
-                <button onClick={() => setShowEdit(false)} className="px-4 py-2 rounded-xl text-gray-400 hover:text-white transition-colors">Cancel</button>
+              <div className="flex gap-4 pt-4 relative z-10">
+                <button onClick={handleEditSave} className="h-16 px-12 rounded-2xl bg-gradient-to-r from-primary to-accent text-white font-black text-[11px] uppercase tracking-[0.3em] shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-4">
+                   <Check size={20}/> Commit Configuration
+                </button>
+                <button onClick={() => setShowEdit(false)} className="h-16 px-8 rounded-2xl bg-white/5 text-gray-500 font-black text-[11px] uppercase tracking-widest hover:text-white transition-all">Cancel</button>
               </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 mb-6 border-b border-dark-border pb-px">
+      {/* Art Interface Tabs */}
+      <div className="flex flex-wrap gap-10 mb-12 border-b border-white/5 px-10 relative">
         {tabs.map(t => (
           <button key={t} onClick={() => setActiveTab(t)}
-            className={`px-6 py-3 text-sm font-semibold capitalize transition-colors border-b-2 flex items-center gap-2 ${activeTab === t ? 'text-primary border-primary' : 'text-gray-500 border-transparent hover:text-gray-300'}`}>
-            {t === 'chat' && <MessageCircle size={14}/>}
-            {t === 'requests' && (
-              <span className="flex items-center gap-1">
-                {t}
-                {community?.joinRequests?.length > 0 && (
-                  <span className="ml-1 w-5 h-5 bg-red-500 rounded-full text-white text-xs flex items-center justify-center">{community.joinRequests.length}</span>
-                )}
-              </span>
+            className={`pb-8 text-[11px] font-black uppercase tracking-[0.4em] transition-all relative flex items-center gap-4 group/tab ${activeTab === t ? 'text-white' : 'text-gray-600 hover:text-gray-400'}`}>
+            {t === 'feed' && <LayoutGrid size={18} className={activeTab === t ? 'text-primary' : ''}/>}
+            {t === 'chat' && <MessageCircle size={18} className={activeTab === t ? 'text-primary' : ''}/>}
+            {t === 'members' && <Users size={18} className={activeTab === t ? 'text-primary' : ''}/>}
+            {t === 'requests' && <Target size={18} className={activeTab === t ? 'text-accent' : ''}/>}
+            
+            {t}
+            
+            {t === 'requests' && community?.joinRequests?.length > 0 && (
+              <span className="w-6 h-6 bg-accent rounded-lg text-white text-[9px] flex items-center justify-center font-black animate-pulse shadow-lg shadow-accent/20">{community.joinRequests.length}</span>
             )}
-            {t !== 'chat' && t !== 'requests' && t}
+            
+            {activeTab === t && <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-primary shadow-[0_0_20px_rgba(124,58,237,1)] rounded-full animate-fade-in" />}
           </button>
         ))}
       </div>
 
-      {/* Tab Content */}
-      <div className="grid grid-cols-1 gap-6">
+      {/* Dynamic Module Rendering */}
+      <div className="animate-slide-up">
 
-        {/* ── Feed ── */}
+        {/* ── Art Feed ── */}
         {activeTab === 'feed' && (
-          <>
+          <div className="space-y-12">
             {isMember ? (
               <>
-                <div className="flex justify-end mb-4">
-                  <button onClick={() => setShowPostForm(!showPostForm)} className="btn-primary flex items-center gap-2">
-                    {showPostForm ? <><X size={16}/> Cancel</> : <><Plus size={16}/> New Post</>}
+                <div className="flex justify-between items-center bg-dark-card border border-white/5 px-10 py-6 rounded-[2.5rem] shadow-2xl relative overflow-hidden group/postbar">
+                  <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-accent/5 opacity-0 group-hover/postbar:opacity-100 transition-opacity duration-700" />
+                  <div className="flex items-center gap-4 relative z-10">
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.4em]">Post Station</span>
+                    <span className="text-[9px] font-black text-gray-600 uppercase tracking-widest hidden sm:block">· Share your art with the community</span>
+                  </div>
+                  <button
+                    type="button"
+                    id="create-post-btn"
+                    onClick={() => setShowCreateModal(true)}
+                    className="relative z-10 group/cpbtn h-14 px-10 rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] transition-all duration-500 flex items-center gap-3 shadow-2xl active:scale-95 bg-gradient-to-r from-primary to-accent text-white shadow-primary/30 hover:shadow-primary/60 hover:-translate-y-1 hover:scale-105"
+                  >
+                    <span className="w-7 h-7 rounded-xl bg-white/20 flex items-center justify-center group-hover/cpbtn:rotate-90 transition-transform duration-500">
+                      <Plus size={16} className="text-white" />
+                    </span>
+                    Create Post
+                    <span className="w-2 h-2 rounded-full bg-white/60 animate-ping absolute -top-1 -right-1" />
                   </button>
                 </div>
-                {showPostForm && (
-                  <form onSubmit={handleCreatePost} className="card mb-6 space-y-4 animate-slide-up">
-                    <input value={postForm.title} onChange={e => setPostForm({...postForm, title: e.target.value})} placeholder="Post Title" className="input" required />
-                    <textarea value={postForm.description} onChange={e => setPostForm({...postForm, description: e.target.value})} placeholder="Description" className="input h-20 resize-none" />
-                    <input type="file" accept="image/*" onChange={e => setPostFile(e.target.files[0])} className="input" required />
-                    <button type="submit" className="btn-primary">Post to Community</button>
-                  </form>
-                )}
+
                 {posts.length === 0 ? (
-                  <div className="text-center py-16 card"><p className="text-gray-400">No posts yet. Be the first!</p></div>
+                  <div className="text-center py-40 bg-dark-card border-2 border-dashed border-white/5 rounded-[4rem] group/zero">
+                     <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover/zero:opacity-100 transition-opacity" />
+                    <div className="w-24 h-24 bg-surface rounded-[2rem] border border-white/5 flex items-center justify-center mx-auto mb-8 shadow-2xl relative z-10">
+                       <ImageIcon size={40} className="text-gray-700"/>
+                    </div>
+                    <h3 className="text-2xl font-black text-white mb-3 tracking-tighter relative z-10">Art Feed Silent</h3>
+                    <p className="text-gray-500 font-medium relative z-10">Initiate the first message for this group.</p>
+                  </div>
                 ) : (
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {posts.filter(p => p?._id && p?.imageUrl).map(p => (
-                      <div key={p._id} className="aspect-square rounded-xl overflow-hidden group cursor-pointer relative" onClick={() => setSelectedArtwork(p)}>
-                        <img src={p.imageUrl.startsWith('http') ? p.imageUrl : `${API_BASE}${p.imageUrl}`} alt={p.title || 'Post'} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
-                          <p className="text-white font-semibold text-sm truncate">{p.title || 'Untitled'}</p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+                    {posts.filter(p => p?._id && p?.imageUrl).map((p, i) => {
+                      const artist = p.artist;
+                      const artistId = artist?._id || artist;
+                      const artistImg = artist?.profileImage ? mediaSrc(artist.profileImage) : null;
+                      return (
+                      <div key={p._id} className="group/card aspect-[4/5] rounded-[2.5rem] bg-dark-card border border-white/5 cursor-pointer relative shadow-2xl hover:shadow-primary/20 transform hover:-translate-y-2 transition-all duration-700 animate-slide-up" style={{ animationDelay: `${i * 100}ms` }} onClick={() => setSelectedArtwork(p)}>
+                        {/* Image wrapper with overflow hidden so image is clipped to card shape */}
+                        <div className="absolute inset-0 rounded-[2.5rem] overflow-hidden">
+                          <img src={mediaSrc(p.imageUrl)} alt={p.title || 'Post'} className="w-full h-full object-cover transition-transform duration-1000 group-hover/card:scale-110" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-[#0c0d0f] via-transparent to-transparent opacity-60 group-hover/card:opacity-90 transition-opacity duration-500" />
                         </div>
+
+                        {/* Artist bar — sits above image, NOT clipped */}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); if (artistId) navigate(`/profile/${artistId}`); }}
+                          className="absolute top-4 left-4 right-4 z-30 flex items-center gap-3 rounded-2xl bg-black/60 border border-white/10 px-4 py-3 text-left backdrop-blur-xl transition-all hover:border-primary/50 hover:bg-black/80"
+                        >
+                          <span className="w-10 h-10 rounded-xl bg-primary/10 border border-white/10 overflow-hidden flex items-center justify-center text-xs font-black text-primary shrink-0">
+                            {artistImg ? <img src={artistImg} alt="" className="w-full h-full object-cover" /> : artist?.username?.[0]?.toUpperCase()}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-xs font-black text-white truncate hover:text-primary">{artist?.username || 'Artist'}</span>
+                            <span className="block text-[8px] font-black uppercase tracking-widest text-gray-500">View profile</span>
+                          </span>
+                        </button>
+                        
+                        <div className="absolute bottom-8 left-8 right-8 z-20 translate-y-4 opacity-0 group-hover/card:translate-y-0 group-hover/card:opacity-100 transition-all duration-500">
+                           <div className="flex items-center gap-3 mb-2">
+                              <span className="text-[8px] font-black text-primary uppercase tracking-[0.4em] bg-primary/10 px-3 py-1 rounded-lg border border-primary/20 backdrop-blur-md">Message</span>
+                              {p.isAdultContent && <span className="text-[8px] font-black text-accent uppercase tracking-[0.4em] bg-accent/10 px-3 py-1 rounded-lg border border-accent/20 backdrop-blur-md">18+</span>}
+                           </div>
+                           <h4 className="text-xl font-black text-white tracking-tighter truncate">{p.title || 'Untitled Post'}</h4>
+                           <div className="flex items-center justify-between mt-4 pt-4 border-t border-white/10">
+                              <div className="flex items-center gap-2">
+                                 <Heart size={14} className="text-red-500 fill-red-500/20" />
+                                 <span className="text-[10px] font-black text-white">{p.likes?.length || 0}</span>
+                              </div>
+                              <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">{new Date(p.createdAt).toLocaleDateString()}</span>
+                           </div>
+                        </div>
+                        
+                        {/* Interactive UI corners */}
+                        <div className="absolute top-6 left-6 w-8 h-8 border-t-2 border-l-2 border-white/20 rounded-tl-xl opacity-0 group-hover/card:opacity-100 transition-opacity duration-700 z-10" />
+                        <div className="absolute bottom-6 right-6 w-8 h-8 border-b-2 border-r-2 border-white/20 rounded-br-xl opacity-0 group-hover/card:opacity-100 transition-opacity duration-700 z-10" />
                       </div>
-                    ))}
+                    );})}
                   </div>
                 )}
               </>
             ) : (
-              <div className="text-center py-20 card">
-                <Users size={48} className="mx-auto text-gray-600 mb-4" />
-                <h3 className="text-xl font-bold text-white mb-2">Join to see posts</h3>
-                <p className="text-gray-400">
-                  {community.isPrivate
-                    ? 'This is a private community. Request to join and wait for admin approval.'
-                    : 'You need to be a member to view and interact with posts.'}
-                </p>
+              <div className="text-center py-40 bg-dark-card border border-white/5 rounded-[4rem] group/lock relative overflow-hidden shadow-2xl">
+                <div className="absolute inset-0 bg-accent/5 opacity-0 group-hover/lock:opacity-100 transition-opacity duration-1000" />
+                <div className="w-32 h-32 bg-surface rounded-[3rem] border border-white/5 flex items-center justify-center mx-auto mb-10 shadow-2xl relative z-10 group-hover/lock:scale-110 group-hover/lock:rotate-6 transition-all duration-700">
+                   <Lock size={56} className="text-gray-700 group-hover/lock:text-accent transition-colors duration-700" />
+                </div>
+                <div className="space-y-4 relative z-10 px-10">
+                   <h3 className="text-3xl font-black text-white tracking-tighter">Message Encrypted</h3>
+                   <p className="text-gray-500 max-w-sm mx-auto mb-10 font-medium text-lg leading-relaxed">
+                     {community.isPrivate
+                       ? 'This group is private. Send a request to join.'
+                       : 'Join this group to see posts.'}
+                   </p>
+                </div>
                 {!hasPendingRequest && (
-                  <button onClick={handleJoin} className="btn-primary mt-4 mx-auto">
-                    {community.isPrivate ? 'Request to Join' : 'Join Community'}
-                  </button>
+                  <button onClick={handleJoin} className="relative z-10 bg-primary/10 text-primary border-2 border-primary/20 px-12 py-5 rounded-[2rem] font-black text-[11px] uppercase tracking-[0.3em] hover:bg-primary hover:text-white transition-all duration-500 shadow-2xl">Start Request</button>
                 )}
                 {hasPendingRequest && (
-                  <p className="text-orange-400 mt-4 text-sm font-medium">⏳ Your request is pending admin approval</p>
-                )}
-              </div>
-            )}
-          </>
-        )}
-
-        {/* ── Community Chat ── */}
-        {activeTab === 'chat' && (
-          <>
-            {isMember ? (
-              <div className="card p-0 overflow-hidden flex flex-col" style={{height: '65vh'}}>
-                <div className="p-4 border-b border-dark-border flex items-center gap-2">
-                  <MessageCircle size={18} className="text-primary" />
-                  <h3 className="font-bold text-white">Community Chat</h3>
-                  <span className="text-xs text-gray-500">— {members.length} members</span>
-                </div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                  {chatMessages.length === 0 && (
-                    <div className="text-center text-gray-500 py-10 text-sm">No messages yet. Start the conversation!</div>
-                  )}
-                  {chatMessages.map((m, i) => {
-                    const senderId = m.sender?._id || m.sender;
-                    const isMe = senderId === user._id || senderId?.toString() === user._id;
-                    const senderName = m.sender?.username || 'Unknown';
-                    const senderImg = m.sender?.profileImage;
-                    const imgSrc = senderImg ? (senderImg.startsWith('http') ? senderImg : `${API_BASE}${senderImg}`) : null;
-                    return (
-                      <div key={i} className={`flex gap-2 group ${isMe ? 'flex-row-reverse' : ''}`}>
-                        {/* Clickable avatar */}
-                        <button
-                          onClick={() => senderId && navigate(`/profile/${senderId}`)}
-                          className="w-8 h-8 rounded-full bg-primary/30 flex-shrink-0 flex items-center justify-center text-xs font-bold text-primary overflow-hidden hover:ring-2 hover:ring-primary transition-all self-end"
-                        >
-                          {imgSrc ? <img src={imgSrc} alt="" className="w-full h-full object-cover"/> : senderName[0]?.toUpperCase()}
-                        </button>
-                        <div className={`max-w-xs flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                          {!isMe && <span className="text-xs text-gray-500 mb-1">{senderName}</span>}
-                          {/* Reply preview */}
-                          {m.replyTo?.message && (
-                            <div className="mb-1 px-3 py-1.5 rounded-lg bg-dark border-l-4 border-primary/50 text-xs max-w-full">
-                              <p className="text-primary/80 font-semibold">{m.replyTo.senderName}</p>
-                              <p className="text-gray-500 truncate">{m.replyTo.message}</p>
-                            </div>
-                          )}
-                          <div className={`px-4 py-2.5 rounded-2xl text-sm ${isMe ? 'bg-primary text-white rounded-br-md' : 'bg-surface text-gray-200 rounded-bl-md'}`}>
-                            {m.message}
-                            <p className={`text-[10px] mt-1 ${isMe ? 'text-white/50' : 'text-gray-500'}`}>
-                              {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </p>
-                          </div>
-                        </div>
-                        {/* Reply action */}
-                        <button
-                          onClick={() => setChatReplyTo({ messageId: m._id, message: m.message, senderName })}
-                          className={`self-center text-gray-500 hover:text-primary opacity-0 group-hover:opacity-100 transition-all ${isMe ? 'mr-1' : 'ml-1'}`}
-                        >
-                          <CornerUpLeft size={14}/>
-                        </button>
-                      </div>
-                    );
-                  })}
-                  <div ref={chatEndRef} />
-                </div>
-                {/* Reply preview bar */}
-                {chatReplyTo && (
-                  <div className="mx-4 mb-2 px-3 py-2 bg-primary/10 border-l-4 border-primary rounded-lg flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-xs text-primary font-semibold mb-0.5">↩ Replying to {chatReplyTo.senderName}</p>
-                      <p className="text-xs text-gray-400 truncate">{chatReplyTo.message}</p>
-                    </div>
-                    <button onClick={() => setChatReplyTo(null)} className="text-gray-500 hover:text-white flex-shrink-0"><X size={14}/></button>
+                  <div className="relative z-10 inline-flex items-center gap-4 bg-accent/10 border-2 border-accent/20 px-10 py-5 rounded-[2rem] animate-pulse shadow-2xl shadow-accent/20">
+                     <Zap size={20} className="text-accent" />
+                     <span className="text-[11px] font-black text-accent uppercase tracking-[0.3em]">Art Link Pending...</span>
                   </div>
                 )}
-                <form onSubmit={handleSendChatMsg} className="p-4 border-t border-dark-border flex gap-3">
-                  <input value={chatMsg} onChange={e => setChatMsg(e.target.value)} placeholder="Message the community..." className="input flex-1 py-2.5"/>
-                  <button type="submit" className="btn-primary px-4"><Send size={18}/></button>
-                </form>
-              </div>
-            ) : (
-              <div className="text-center py-20 card">
-                <MessageCircle size={48} className="mx-auto text-gray-600 mb-4" />
-                <h3 className="text-xl font-bold text-white mb-2">Members only chat</h3>
-                <p className="text-gray-400">Join this community to participate in the chat.</p>
               </div>
             )}
-          </>
+          </div>
         )}
 
-        {/* ── Members ── */}
+        {/* ── Art Chat ── */}
+        {activeTab === 'chat' && (
+          <div className="animate-slide-up">
+            {isMember ? (
+              <div className="bg-dark-card border border-white/5 rounded-[3.5rem] overflow-hidden flex flex-col shadow-[0_60px_120px_-30px_rgba(0,0,0,0.8)] relative group/chatbox" style={{height: '75vh'}}>
+                <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover/chatbox:opacity-100 transition-opacity duration-1000 pointer-events-none" />
+                
+                <div className="px-12 py-8 border-b border-white/5 bg-surface/30 backdrop-blur-3xl flex items-center justify-between relative z-10">
+                  <div className="flex items-center gap-6">
+                    <div className="w-16 h-16 rounded-[1.5rem] bg-primary/10 flex items-center justify-center text-primary shadow-2xl border border-primary/20">
+                       <MessageCircle size={32} />
+                    </div>
+                    <div>
+                       <h3 className="text-2xl font-black text-white tracking-tighter leading-none flex items-center gap-4">Group Message Hub <BadgeCheck size={18} className="text-primary fill-primary/10"/></h3>
+                       <p className="text-[10px] text-gray-500 font-black uppercase tracking-[0.3em] mt-2 flex items-center gap-3">
+                          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> {members.length} Integrated Artists Active
+                       </p>
+                    </div>
+                  </div>
+
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-12 py-10 space-y-10 hide-scrollbar scroll-smooth relative z-10">
+                  {chatMessages.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full space-y-8 opacity-20 group-hover/chatbox:opacity-40 transition-opacity duration-1000">
+                       <div className="w-32 h-32 bg-surface/40 rounded-[3rem] border border-dashed border-white/20 flex items-center justify-center">
+                          <Zap size={48} className="text-gray-400"/>
+                       </div>
+                       <p className="text-[11px] font-black uppercase tracking-[0.5em] text-center">No messages yet. Send the first message.</p>
+                    </div>
+                  ) : (
+                    chatMessages.map((m, i) => {
+                      const senderId = m.sender?._id || m.sender;
+                      const isMe = senderId === user._id || senderId?.toString() === user._id;
+                      const sName = m.sender?.username || 'Artist';
+                      const sImg = m.sender?.profileImage;
+                      const imgSrc = sImg ? (sImg.startsWith('http') ? sImg : `${API_BASE}${sImg}`) : null;
+                      
+                      return (
+                        <div key={i} className={`flex gap-5 group/msg relative ${isMe ? 'flex-row-reverse' : ''} animate-fade-in`}>
+                          <button
+                            onClick={() => senderId && navigate(`/profile/${senderId}`)}
+                            className="w-11 h-11 rounded-[1.25rem] bg-surface/40 flex-shrink-0 flex items-center justify-center text-xs font-black text-primary overflow-hidden border border-white/5 shadow-2xl self-end hover:scale-110 transition-all hover:border-primary/40 group-hover/msg:rotate-3 duration-500"
+                          >
+                            {imgSrc ? <img src={imgSrc} alt="" className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center bg-primary/10">{sName[0]?.toUpperCase()}</div>}
+                          </button>
+                          
+                          <div className={`flex flex-col max-w-[80%] md:max-w-[65%] ${isMe ? 'items-end' : 'items-start'} space-y-1.5`}>
+                            {!isMe && (
+                               <span className="text-[9px] font-black text-gray-500 mb-0.5 ml-3 uppercase tracking-[0.3em] hover:text-primary transition-colors cursor-pointer" onClick={() => navigate(`/profile/${senderId}`)}>
+                                  {sName}
+                               </span>
+                            )}
+                            
+                            {m.replyTo?.message && (
+                              <div className="mb-1 px-4 py-3 rounded-[1.25rem] bg-white/5 border-l-4 border-primary/40 text-[11px] max-w-full backdrop-blur-md opacity-60 hover:opacity-100 transition-opacity cursor-pointer group/reply">
+                                <p className="text-primary font-black uppercase text-[8px] mb-1 tracking-widest">{m.replyTo.senderName}</p>
+                                <p className="text-gray-400 truncate italic font-medium">{m.replyTo.message}</p>
+                              </div>
+                            )}
+
+                            <div className={`relative px-6 py-4 rounded-[2rem] text-[13px] shadow-2xl transition-all duration-500 border ${isMe ? 'bg-gradient-to-br from-primary to-accent text-white border-white/10 rounded-br-md hover:shadow-primary/20' : 'bg-surface/40 border-white/5 text-gray-200 rounded-bl-md hover:bg-surface/60 hover:border-white/10'}`}>
+                              <p className="leading-relaxed font-medium tracking-tight whitespace-pre-wrap">{m.message}</p>
+                              <div className={`flex items-center gap-2.5 mt-3 justify-end ${isMe ? 'text-white/40' : 'text-gray-500'}`}>
+                                <span className="text-[9px] font-black uppercase tracking-tighter italic">
+                                  {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                                {isMe && <div className="flex -space-x-1"><Check size={10} className="text-white/60" /><Check size={10} className="text-white/60 -ml-1.5" /></div>}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <button
+                            onClick={() => setChatReplyTo({ messageId: m._id, message: m.message, senderName: sName })}
+                            className={`self-center w-10 h-10 rounded-2xl bg-surface/60 backdrop-blur-3xl flex items-center justify-center text-gray-500 hover:text-primary transition-all border border-white/5 hover:border-primary/20 hover:-translate-y-1 shadow-xl opacity-0 group-hover/msg:opacity-100 ${isMe ? 'mr-2' : 'ml-2'}`}
+                          >
+                            <CornerUpLeft size={16}/>
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
+
+                <div className="px-12 pb-12 pt-4 relative z-10">
+                  <ChatReplyPreview replyTo={chatReplyTo} onCancel={() => setChatReplyTo(null)}/>
+                  <form onSubmit={handleSendChatMsg} className="relative flex items-center group/input shadow-[0_20px_50px_-10px_rgba(0,0,0,0.5)]">
+                    <div className="absolute left-6 flex items-center gap-3">
+                       <button type="button" className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-gray-500 hover:text-primary transition-all border border-transparent hover:border-white/10 group/clip">
+                          <Paperclip size={20} className="group-hover/clip:rotate-45 transition-transform" />
+                       </button>
+                    </div>
+                    <input 
+                      value={chatMsg} 
+                      onChange={e => setChatMsg(e.target.value)} 
+                      placeholder="Write a group message..." 
+                      className="w-full bg-surface/40 backdrop-blur-3xl border-2 border-white/5 rounded-[2.5rem] pl-20 pr-40 py-6 text-[15px] font-medium text-white placeholder-gray-600 focus:outline-none focus:border-primary/50 transition-all duration-500 shadow-inner group-focus-within/input:bg-surface/60"
+                    />
+                    <div className="absolute right-6 flex items-center gap-4">
+                       <button type="submit" disabled={!chatMsg.trim()} className="h-14 px-8 bg-gradient-to-r from-primary to-accent rounded-[1.5rem] flex items-center justify-center gap-3 text-white shadow-2xl shadow-primary/40 hover:shadow-primary/60 transition-all hover:-translate-y-1 active:scale-95 disabled:opacity-20 disabled:translate-y-0 group/send">
+                          <span className="text-[10px] font-black uppercase tracking-[0.3em] hidden sm:block">Send</span>
+                          <Send size={20} className="group-hover/send:translate-x-1 group-hover/send:-translate-y-1 transition-transform" />
+                       </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-40 bg-dark-card border border-white/5 rounded-[4rem] group/lock relative overflow-hidden shadow-2xl">
+                <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover/lock:opacity-100 transition-opacity duration-1000" />
+                <div className="w-32 h-32 bg-surface rounded-[3rem] border border-white/5 flex items-center justify-center mx-auto mb-10 shadow-2xl relative z-10 group-hover/lock:scale-110 transition-all duration-700">
+                   <MessageCircle size={56} className="text-gray-700 group-hover/lock:text-primary transition-colors duration-700" />
+                </div>
+                <div className="space-y-4 relative z-10 px-10">
+                   <h3 className="text-3xl font-black text-white tracking-tighter">Group Communication Locked</h3>
+                   <p className="text-gray-500 max-w-sm mx-auto mb-10 font-medium text-lg leading-relaxed">
+                     Join this group to use the live chat.
+                   </p>
+                </div>
+                <button onClick={handleJoin} className="relative z-10 bg-primary/10 text-primary border-2 border-primary/20 px-12 py-5 rounded-[2rem] font-black text-[11px] uppercase tracking-[0.3em] hover:bg-primary hover:text-white transition-all duration-500 shadow-2xl">Establish Art Link</button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Integrated Members (Members) ── */}
         {activeTab === 'members' && (
-          <div className="card">
-            <h3 className="text-lg font-bold text-white mb-4">Members ({members.length})</h3>
-            <div className="space-y-3">
+          <div className="bg-dark-card border border-white/5 rounded-[3.5rem] p-12 shadow-2xl animate-slide-up relative group/members">
+             <div className="absolute top-0 right-0 w-96 h-96 bg-primary/5 rounded-full -mr-48 -mt-48 blur-[100px] pointer-events-none" />
+            <div className="flex items-center justify-between mb-12 relative z-10">
+               <div>
+                  <h3 className="text-3xl font-black text-white tracking-tighter leading-none">Integrated <span className="text-primary italic">Artists</span></h3>
+                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.4em] mt-2">Active members within the group architecture</p>
+               </div>
+               <div className="bg-primary/10 border border-primary/20 px-6 py-3 rounded-2xl flex items-center gap-4">
+                  <Users size={20} className="text-primary" />
+                  <span className="text-[11px] font-black text-primary uppercase tracking-widest">{members.length} Members Saved</span>
+               </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 relative z-10">
               {members.map((m, index) => {
                 const memberId = m?._id || m;
-                const memberUsername = m?.username || 'Unknown user';
+                const mname = m?.username || 'Integrated Artist';
+                const isCreator = creatorId === memberId;
+                const mimg = m?.profileImage;
+                const mimgSrc = mimg ? (mimg.startsWith('http') ? mimg : `${API_BASE}${mimg}`) : null;
+                
                 return (
-                  <div key={memberId || index} className="flex items-center justify-between p-3 rounded-xl bg-dark hover:bg-[#2a2b2f] transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 avatar bg-primary/30 flex items-center justify-center text-primary font-bold">
-                        {m?.profileImage
-                          ? <img src={m.profileImage.startsWith('http') ? m.profileImage : `${API_BASE}${m.profileImage}`} className="w-full h-full object-cover" alt="" />
-                          : memberUsername?.[0]?.toUpperCase()}
+                  <div key={memberId || index} className="flex items-center justify-between p-6 rounded-[2rem] bg-white/5 border border-white/5 hover:border-primary/40 hover:bg-white/10 transition-all duration-700 group/mbr relative overflow-hidden">
+                    <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover/mbr:opacity-100 transition-opacity" />
+                    <div className="flex items-center gap-5 relative z-10">
+                      <div className="w-16 h-16 rounded-[1.25rem] bg-surface/60 border border-white/5 flex items-center justify-center overflow-hidden group-hover/mbr:scale-105 transition-transform duration-500 shadow-2xl">
+                        {mimgSrc ? (
+                          <img src={mimgSrc} className="w-full h-full object-cover" alt="" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-primary/10 text-primary font-black text-xl">{mname[0]?.toUpperCase()}</div>
+                        )}
                       </div>
-                      <div>
-                        <button onClick={() => memberId && navigate(`/profile/${memberId}`)} className="font-semibold text-white hover:text-primary">
-                          {memberUsername}
+                      <div className="space-y-1">
+                        <button onClick={() => memberId && navigate(`/profile/${memberId}`)} className="text-lg font-black text-white hover:text-primary transition-all tracking-tighter block group-hover/mbr:translate-x-1 duration-500">
+                          {mname}
                         </button>
-                        {creatorId === memberId && <span className="block text-xs text-accent">Admin</span>}
+                        {isCreator && (
+                          <div className="flex items-center gap-2">
+                             <Shield size={10} className="text-primary" />
+                             <span className="text-[8px] font-black text-primary uppercase tracking-[0.2em]">Group Architect</span>
+                          </div>
+                        )}
+                        {!isCreator && <span className="text-[8px] font-black text-gray-600 uppercase tracking-[0.2em]">Saved Member</span>}
                       </div>
                     </div>
-                    {isAdmin && creatorId !== memberId && memberId && (
-                      <button onClick={() => handleRemoveMember(memberId)} className="text-xs text-red-400 hover:text-red-300 px-3 py-1 rounded-lg border border-red-500/20 hover:bg-red-500/10 transition-colors">
-                        Remove
+                    {isAdmin && !isCreator && memberId && (
+                      <button onClick={() => handleRemoveMember(memberId)} className="w-12 h-12 rounded-xl bg-red-500/5 text-red-500 border border-red-500/10 opacity-0 group-hover/mbr:opacity-100 hover:bg-red-500 hover:text-white transition-all duration-500 flex items-center justify-center shadow-xl relative z-10">
+                        <UserX size={20}/>
                       </button>
                     )}
                   </div>
@@ -515,45 +696,68 @@ export default function CommunityView() {
           </div>
         )}
 
-        {/* ── Join Requests (Admin Only) ── */}
+        {/* ── Join Requests (Admin Panel) ── */}
         {activeTab === 'requests' && isAdmin && (
-          <div className="card">
-            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-              <UserCheck size={18} className="text-primary"/> Join Requests ({joinRequests.length})
-            </h3>
+          <div className="bg-dark-card border border-white/5 rounded-[3.5rem] p-12 shadow-2xl animate-slide-up relative group/reqs">
+             <div className="absolute top-0 left-0 w-96 h-96 bg-accent/5 rounded-full -ml-48 -mt-48 blur-[100px] pointer-events-none" />
+            <div className="flex items-center justify-between mb-12 relative z-10">
+               <div>
+                  <h3 className="text-3xl font-black text-white tracking-tighter leading-none">Art <span className="text-accent italic">Inbound Requests</span></h3>
+                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.4em] mt-2">Incoming members awaiting group integration</p>
+               </div>
+               <div className="bg-accent/10 border border-accent/20 px-6 py-3 rounded-2xl flex items-center gap-4">
+                  <Target size={20} className="text-accent" />
+                  <span className="text-[11px] font-black text-accent uppercase tracking-widest">{joinRequests.length} Messages Pending</span>
+               </div>
+            </div>
+
             {joinRequests.length === 0 ? (
-              <p className="text-gray-400 text-center py-8">No pending join requests.</p>
+              <div className="text-center py-32 bg-dark/40 rounded-[3rem] border-2 border-dashed border-white/5 group/noreqs">
+                 <div className="w-20 h-20 bg-surface rounded-[1.5rem] flex items-center justify-center mx-auto mb-6 shadow-2xl">
+                    <Check size={32} className="text-gray-700"/>
+                 </div>
+                 <p className="text-gray-500 font-black text-[10px] uppercase tracking-[0.5em]">Global field saved. No pending inbound members.</p>
+              </div>
             ) : (
-              <div className="space-y-3">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 relative z-10">
                 {joinRequests.map((req, i) => {
                   const u = req.user;
                   const userId = u?._id || u;
-                  const username = u?.username || 'Unknown';
+                  const username = u?.username || 'Integrated Artist';
+                  const uimg = u?.profileImage;
+                  const uimgSrc = uimg ? (uimg.startsWith('http') ? uimg : `${API_BASE}${uimg}`) : null;
+                  
                   return (
-                    <div key={userId || i} className="flex items-center justify-between p-4 rounded-xl bg-dark border border-dark-border">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 avatar bg-primary/30 flex items-center justify-center text-primary font-bold overflow-hidden">
-                          {u?.profileImage
-                            ? <img src={u.profileImage.startsWith('http') ? u.profileImage : `${API_BASE}${u.profileImage}`} className="w-full h-full object-cover" alt=""/>
-                            : username?.[0]?.toUpperCase()}
+                    <div key={userId || i} className="flex items-center justify-between p-8 rounded-[2.5rem] bg-white/5 border border-white/5 hover:border-accent/40 hover:bg-white/10 transition-all duration-700 group/ritem relative overflow-hidden shadow-2xl">
+                      <div className="absolute inset-0 bg-accent/5 opacity-0 group-hover/ritem:opacity-100 transition-opacity" />
+                      <div className="flex items-center gap-6 relative z-10">
+                        <div className="w-20 h-20 rounded-[1.5rem] bg-surface/60 border border-white/5 flex items-center justify-center overflow-hidden shadow-2xl group-hover/ritem:scale-105 duration-500">
+                          {uimgSrc ? (
+                            <img src={uimgSrc} className="w-full h-full object-cover" alt=""/>
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-accent/10 text-accent font-black text-2xl">{username[0]?.toUpperCase()}</div>
+                          )}
                         </div>
-                        <div>
-                          <button onClick={() => userId && navigate(`/profile/${userId}`)} className="font-semibold text-white hover:text-primary transition-colors">
+                        <div className="space-y-2">
+                          <button onClick={() => userId && navigate(`/profile/${userId}`)} className="text-xl font-black text-white hover:text-accent transition-all tracking-tighter block group-hover/ritem:translate-x-1 duration-500">
                             {username}
                           </button>
-                          <p className="text-xs text-gray-500">
-                            Requested {req.requestedAt ? new Date(req.requestedAt).toLocaleDateString() : ''}
-                          </p>
+                          <div className="flex items-center gap-3">
+                             <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+                             <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">
+                               Inbound Link established {req.requestedAt ? new Date(req.requestedAt).toLocaleDateString() : ''}
+                             </p>
+                          </div>
                         </div>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-4 relative z-10">
                         <button onClick={() => handleJoinRequest(userId, 'accept')}
-                          className="flex items-center gap-1.5 text-sm text-green-400 hover:text-white px-3 py-1.5 rounded-lg border border-green-500/30 hover:bg-green-500 transition-all">
-                          <UserCheck size={14}/> Accept
+                          className="h-14 w-14 rounded-2xl bg-green-500/10 text-green-500 border border-green-500/20 hover:bg-green-500 hover:text-white transition-all duration-500 flex items-center justify-center shadow-xl group/acc">
+                          <UserCheck size={24} className="group-hover/acc:scale-110 transition-transform" />
                         </button>
                         <button onClick={() => handleJoinRequest(userId, 'reject')}
-                          className="flex items-center gap-1.5 text-sm text-red-400 hover:text-white px-3 py-1.5 rounded-lg border border-red-500/30 hover:bg-red-500 transition-all">
-                          <UserX size={14}/> Reject
+                          className="h-14 w-14 rounded-2xl bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white transition-all duration-500 flex items-center justify-center shadow-xl group/rej">
+                          <UserX size={24} className="group-hover/rej:scale-110 transition-transform" />
                         </button>
                       </div>
                     </div>
@@ -565,7 +769,17 @@ export default function CommunityView() {
         )}
       </div>
 
-      <ImageViewerModal isOpen={!!selectedArtwork} onClose={() => setSelectedArtwork(null)} artwork={selectedArtwork} reportTargetType="artwork" />
+      <ImageViewerModal isOpen={!!selectedArtwork} onClose={() => setSelectedArtwork(null)} artwork={selectedArtwork} reportTargetType="artwork" onDeleted={handleArtworkDeleted} />
+
+
+      {showCreateModal && (
+        <CreatePostModal
+          communityId={id}
+          isAdultUser={isAdultUser}
+          onClose={() => setShowCreateModal(false)}
+          onSuccess={fetchCommunity}
+        />
+      )}
     </div>
   );
 }

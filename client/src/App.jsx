@@ -19,6 +19,11 @@ import Comics from './pages/Comics';
 import Drawing from './pages/Drawing';
 import ArtHistory from './pages/ArtHistory';
 import AdminPanel from './pages/AdminPanel';
+import MarketplaceFeed from './pages/MarketplaceFeed';
+import CreateRequest from './pages/CreateRequest';
+import RequestDetails from './pages/RequestDetails';
+import ApplicationsPage from './pages/ApplicationsPage';
+import MarketplaceChat from './pages/MarketplaceChat';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -59,6 +64,11 @@ function AppRoutes() {
         <Route path="/comics" element={<Comics />} />
         <Route path="/drawing" element={<Drawing />} />
         <Route path="/art-history" element={<ArtHistory />} />
+        <Route path="/marketplace" element={<MarketplaceFeed />} />
+        <Route path="/marketplace/create" element={<CreateRequest />} />
+        <Route path="/marketplace/requests/:id" element={<RequestDetails />} />
+        <Route path="/marketplace/applications" element={<ApplicationsPage />} />
+        <Route path="/marketplace/chat/:id" element={<MarketplaceChat />} />
         <Route path="/admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
       </Route>
       <Route path="*" element={<Navigate to="/" />} />
@@ -72,7 +82,7 @@ export default function App() {
       <AuthProvider>
         <SocketProvider>
           <AppRoutes />
-          <Toaster position="top-right" toastOptions={{ style: { background: '#1A1A2E', color: '#E2E8F0', border: '1px solid #2D2D4E' } }} />
+          <Toaster position="top-right" toastOptions={{ style: { background: '#111327', color: '#E2E8F0', border: '1px solid #1E2040' } }} />
         </SocketProvider>
       </AuthProvider>
     </BrowserRouter>

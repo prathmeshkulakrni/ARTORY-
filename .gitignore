@@ -1,0 +1,29 @@
+# Node modules
+node_modules/
+**/node_modules/
+
+# Environment files
+.env
+
+# Local logs and build output
+*.log
+*.err.log
+client/dist/
+client/vite.log
+client/vite.err.log
+server/server.log
+server/server.err.log
+
+# Uploaded files and temporary storage
+server/uploads/
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+
+# Local Netlify folder
+.netlify
+
+# Generated / large files not needed in repo
+client/lint.json
+client/deno.lock

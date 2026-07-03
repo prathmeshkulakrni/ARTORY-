@@ -1,6 +1,6 @@
-const Notification = require('../models/Notification');
 const User = require('../models/User');
 const VerificationRequest = require('../models/VerificationRequest');
+const { createNotification, notifyMany } = require('../utils/notify');
 
 const submitVerificationRequest = async (req, res) => {
   try {
@@ -27,6 +27,14 @@ const submitVerificationRequest = async (req, res) => {
       passportPhoto,
       certificateImage,
       status: 'pending'
+    });
+
+    const admins = await User.find({ role: 'admin' }).select('_id');
+    await notifyMany(req, admins, {
+      sender: req.user._id,
+      type: 'system',
+      message: `${req.user.username} submitted a verification request.`,
+      link: '/admin',
     });
 
     res.status(201).json(request);
@@ -61,7 +69,7 @@ const reviewVerificationRequest = async (req, res) => {
 
     await User.findByIdAndUpdate(request.applicant._id, { isVerified: status === 'approved' });
 
-    await Notification.create({
+    await createNotification(req, {
       recipient: request.applicant._id,
       sender: req.user._id,
       type: 'system',

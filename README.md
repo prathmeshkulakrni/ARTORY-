@@ -59,6 +59,13 @@ Make sure you have the following installed:
    npm install
    ```
 
+4. **Seed Sample Data (MongoDB Atlas / Local)**
+   Populate the database with sample users (Admin, Artist, Buyer), mock products, and a demo order.
+   ```bash
+   cd ../server
+   npm run seed:data
+   ```
+
 ## 🔐 Environment Variables
 
 You need to create `.env` files in both the `client` and `server` directories.
@@ -66,7 +73,7 @@ You need to create `.env` files in both the `client` and `server` directories.
 **`server/.env`**
 ```env
 PORT=5000
-MONGO_URI=mongodb://127.0.0.1:27017/artory
+MONGO_URI=mongodb+srv://<username>:<password>@cluster0.mongodb.net/artory?retryWrites=true&w=majority
 JWT_SECRET=your_jwt_secret_key
 CLIENT_URL=http://localhost:5173
 OPENAI_API_KEY=your_openai_api_key
@@ -80,6 +87,50 @@ CLOUDINARY_API_SECRET=your_cloudinary_api_secret
 VITE_API_URL=http://localhost:5000/api
 VITE_SOCKET_URL=http://localhost:5000
 ```
+
+## 🎨 New E-Commerce & Production Hardening Features
+
+We have completed an enterprise-grade extension to Artory's backend database structure and service layers:
+
+### 1. Robust Mongoose Connection Setup (`server/config/db.js`)
+- **Auto-Reconnect & State Handling**: Retries database connections with exponential backoffs (up to 5 retries).
+- **Graceful Shutdown**: Automatically closes MongoDB active socket streams upon receiving `SIGINT` or `SIGTERM` signals.
+- **Enhanced Console Messaging**: Structured logs indicating current cluster states with custom emojis.
+
+### 2. Global Request Validation & Error Interception
+- **Custom Schema Validator (`server/middleware/validate.js`)**: Intercepts payloads strictly at the router layer. Supports validation of body, query, and params.
+- **Centralized Error Handler (`server/middleware/errorHandler.js`)**: Captures bad JSON requests, invalid MongoDB ObjectIds (`CastError`), duplicates (`11000`), validation rule breaches, and JWT token expirations, converting them into structured JSON error payloads.
+
+### 3. Granular Access Control
+- **Dynamic Role-Based Access Control (`server/middleware/auth.js`)**: The `authorizeRoles(...roles)` middleware lets you restrict routes dynamically (e.g. `protect`, `authorizeRoles('admin', 'mentor')`).
+
+### 4. Advanced Schemas & Models
+- **`User`** (`server/models/User.js`): User accounts supporting roles (`user`, `mentor`, `admin`).
+- **`Admin`** (`server/models/Admin.js`): Handles fine-grained metadata, department assignments (`billing`, `content`), security tiers, and specific administrative log settings.
+- **`Product`** (`server/models/Product.js`): E-commerce features tracking title, stock availability, category, price, and artist ownership. Employs text indexing over `title`, `description`, and `tags` for highly optimized query and search APIs.
+- **`Order`** (`server/models/Order.js`): Handles transaction details, locking down historical purchase prices, delivery stages, and billing indicators.
+
+---
+
+## 🛍️ New API Reference
+
+All requests and responses use JSON. Routes marked with 🔒 require a Bearer token in the `Authorization` header.
+
+### 📦 Product Endpoints (`/api/products`)
+* **`GET /api/products`** - Get all products. Supports pagination, keyword text search (`q`), category filters, and price ranges (`minPrice`/`maxPrice`).
+* **`GET /api/products/:id`** - Retrieve single product details, populating artist metadata.
+* **`POST /api/products`** 🔒 - List a new product for sale (Validator schema enforced).
+* **`PUT /api/products/:id`** 🔒 - Update product listing (Enforces ownership or admin role).
+* **`DELETE /api/products/:id`** 🔒 - Delete product listing (Enforces ownership or admin role).
+
+### 🛒 Order Endpoints (`/api/orders`)
+* **`POST /api/orders`** 🔒 - Place a new order. Features concurrency-safe stock deduction checks (preventing race conditions) with automated rollback should item processing fail.
+* **`GET /api/orders/my-orders`** 🔒 - Customer's historical purchases with pagination.
+* **`GET /api/orders/:id`** 🔒 - Order overview. Restricts access to the buying user or admins.
+* **`GET /api/orders`** 🔒 - (Admin only) Detailed log of all marketplace operations.
+* **`PUT /api/orders/:id/status`** 🔒 - (Admin only) Updates order delivery phase. Transitioning to `cancelled` triggers automatic restocking of items.
+
+---
 
 ## 🚀 Running the Application
 
@@ -114,9 +165,10 @@ artory1/
 └── server/                 # Node.js/Express Backend
     ├── config/             # Database and service configurations
     ├── controllers/        # Request handlers
-    ├── middleware/         # Custom Express middleware (e.g., auth)
-    ├── models/             # Mongoose schemas
+    ├── middleware/         # Custom Express middleware (e.g., auth, validation, errors)
+    ├── models/             # Mongoose schemas (User, Admin, Product, Order)
     ├── routes/             # API route definitions
+    ├── scripts/            # Database seed and backfill scripts
     ├── socket/             # Socket.io event handlers
     └── package.json
 ```

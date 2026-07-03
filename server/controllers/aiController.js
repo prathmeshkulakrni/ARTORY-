@@ -9,34 +9,70 @@ const mockResponses = [
   "Shadows define form. Observe how light falls from a single source in your reference.",
 ];
 const VideoTutorial = require('../models/VideoTutorial');
-
+const Mentor = require('../models/Mentor');
+const { runAIRecommendation, buildCatalog } = require('./mentorController');
 const aiMentor = async (req, res) => {
   try {
     const { message, context } = req.body;
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY;
+
+    let mentorSuggestion = null;
+    try {
+      const allMentors = await Mentor.find({ isAvailable: true }).select('name bio tags skills teachingCategories rating experience profileImage').lean();
+      if (allMentors.length > 0) {
+        const catalog = buildCatalog(allMentors);
+        const aiResults = await runAIRecommendation(message, [], catalog);
+        
+        if (aiResults && aiResults.length > 0 && aiResults[0].score >= 5) {
+          const bestMatch = aiResults[0];
+          const fullMentor = allMentors.find(m => m.name === bestMatch.mentorName);
+          if (fullMentor) {
+            mentorSuggestion = {
+              mentorName: bestMatch.mentorName,
+              matchReason: bestMatch.matchReason,
+              matchPercentage: bestMatch.matchPercentage,
+              mentor: fullMentor
+            };
+          }
+        }
+      }
+    } catch (mentorErr) {
+      console.error('In-chat mentor recommendation error:', mentorErr);
+    }
 
     if (apiKey) {
       try {
         const { OpenAI } = require('openai');
-        const openai = new OpenAI({ apiKey });
-        const completion = await openai.chat.completions.create({
-          model: 'gpt-4o-mini',
-          messages: [
-            { role: 'system', content: 'You are Aria, an expert AI art mentor. Give encouraging, specific, actionable advice to artists. Keep responses concise (2-3 sentences max).' },
-            { role: 'user', content: message }
-          ],
-          max_tokens: 200,
+        const openai = new OpenAI({
+          apiKey: apiKey,
+          baseURL: "https://api.groq.com/openai/v1",
         });
-        return res.json({ reply: completion.choices[0].message.content });
-      } catch (openAiErr) {
-        console.error('OpenAI API Error:', openAiErr.message);
+        
+        const response = await openai.chat.completions.create({
+          model: "llama-3.3-70b-versatile",
+          messages: [
+            { role: "system", content: "You are Aria, an expert AI art mentor. Give encouraging, specific, actionable advice to artists. Keep responses concise (2-3 sentences max)." },
+            { role: "user", content: message }
+          ],
+          max_tokens: 200
+        });
+        
+        return res.json({ reply: response.choices[0].message.content, mentorSuggestion });
+      } catch (aiErr) {
+        console.error('Groq API Error:', aiErr.message);
         // Fall through to mock response below instead of crashing
       }
     }
 
     // Mock response
+    const mockResponses = [
+      "Great start! Focus on your line confidence — try drawing without lifting your pen.",
+      "Your composition is strong. Consider the rule of thirds to balance your subject better.",
+      "For this style, try layering light washes of color before adding details.",
+      "Practice gesture drawing for 10 minutes daily — it will dramatically improve your figures.",
+    ];
     const reply = mockResponses[Math.floor(Math.random() * mockResponses.length)];
-    setTimeout(() => res.json({ reply }), 800);
+    setTimeout(() => res.json({ reply, mentorSuggestion }), 800);
   } catch (err) {
     console.error('AI Mentor Error:', err);
     res.status(500).json({ message: err.message });

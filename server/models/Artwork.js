@@ -16,6 +16,7 @@ const artworkSchema = new mongoose.Schema({
   comments: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Comment' }],
   views: { type: Number, default: 0 },
   isFeatured: { type: Boolean, default: false },
+  isAdultContent: { type: Boolean, default: false },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Artwork', artworkSchema);

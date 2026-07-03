@@ -69,7 +69,7 @@ const socketHandler = (io) => {
     });
 
     socket.on('send_community_message', ({ communityId, message, senderInfo, replyTo }) => {
-      io.to(`community_${communityId}`).emit('receive_community_message', {
+      socket.to(`community_${communityId}`).emit('receive_community_message', {
         community: communityId,
         sender: senderInfo,
         message,
@@ -98,6 +98,23 @@ const socketHandler = (io) => {
 
     socket.on('clear_board', (boardId) => {
       io.to(`board_${boardId}`).emit('clear_board');
+    });
+
+    // Marketplace request chats
+    socket.on('join_marketplace_chat', (chatId) => {
+      socket.join(`marketplace_chat_${chatId}`);
+    });
+
+    socket.on('leave_marketplace_chat', (chatId) => {
+      socket.leave(`marketplace_chat_${chatId}`);
+    });
+
+    socket.on('marketplace_typing', ({ chatId, userId }) => {
+      socket.to(`marketplace_chat_${chatId}`).emit('marketplace_user_typing', { userId });
+    });
+
+    socket.on('marketplace_stop_typing', ({ chatId, userId }) => {
+      socket.to(`marketplace_chat_${chatId}`).emit('marketplace_user_stop_typing', { userId });
     });
 
     // ─── Notifications ───────────────────────────────────────────────────────
