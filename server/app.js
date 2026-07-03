@@ -34,11 +34,14 @@ const apiLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Trust proxy for Render, Netlify and other cloud platforms
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
 // Apply rate limiting to API routes (disabled in serverless environments to prevent request.ip validation crashes)
 if (!process.env.NETLIFY) {
   app.use('/api', apiLimiter);
-} else {
-  app.set('trust proxy', true);
 }
 
 // Core Middleware
