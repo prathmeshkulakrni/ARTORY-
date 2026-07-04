@@ -7,7 +7,29 @@ const rateLimit = require('express-rate-limit');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
-const allowedOrigins = [process.env.CLIENT_URL || 'http://localhost:5173', 'http://localhost:5174'];
+
+// CORS origin checker - allows Render deployments, localhost, and any configured CLIENT_URL
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, Postman, curl)
+    if (!origin) return callback(null, true);
+
+    const allowed =
+      !origin ||
+      origin === process.env.CLIENT_URL ||
+      /\.onrender\.com$/.test(origin) ||
+      /^http:\/\/localhost:\d+$/.test(origin) ||
+      /\.netlify\.app$/.test(origin);
+
+    if (allowed) {
+      callback(null, true);
+    } else {
+      console.warn('CORS blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+};
 
 // Set a mock io object to prevent crashes on socket events in serverless environments
 const mockIo = {
@@ -44,7 +66,7 @@ if (!process.env.NETLIFY) {
 }
 
 // Core Middleware
-app.use(cors({ origin: allowedOrigins, credentials: true }));
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));

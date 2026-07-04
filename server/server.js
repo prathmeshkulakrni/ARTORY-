@@ -9,7 +9,13 @@ const app = require('./app');
 connectDB();
 
 const server = http.createServer(app);
-const allowedOrigins = [process.env.CLIENT_URL || 'http://localhost:5173', 'http://localhost:5174'];
+const allowedOrigins = [
+  process.env.CLIENT_URL || 'http://localhost:5173',
+  'http://localhost:5174',
+  /\.onrender\.com$/,
+  /\.netlify\.app$/,
+];
+
 
 const io = new Server(server, {
   cors: { origin: allowedOrigins, methods: ['GET', 'POST'] }
