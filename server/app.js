@@ -95,8 +95,10 @@ app.use('/api/orders', require('./routes/order'));
 app.use('/api/mentors', require('./routes/mentors'));
 
 // Serve React frontend in production (eliminates SPA routing issues)
-if (process.env.NODE_ENV === 'production') {
-  const clientDist = path.join(__dirname, '..', 'client', 'dist');
+const fs = require('fs');
+const clientDist = path.join(__dirname, '..', 'client', 'dist');
+
+if (process.env.NODE_ENV === 'production' && fs.existsSync(clientDist)) {
   app.use(express.static(clientDist));
   // Catch-all: send index.html for any non-API route so React Router works
   app.get('*', (req, res) => {
