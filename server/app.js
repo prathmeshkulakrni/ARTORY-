@@ -94,8 +94,17 @@ app.use('/api/orders', require('./routes/order'));
 // AI Mentor Recommendation Module
 app.use('/api/mentors', require('./routes/mentors'));
 
-// Root Endpoint
-app.get('/', (req, res) => res.json({ message: '🎨 Artory API Running' }));
+// Serve React frontend in production (eliminates SPA routing issues)
+if (process.env.NODE_ENV === 'production') {
+  const clientDist = path.join(__dirname, '..', 'client', 'dist');
+  app.use(express.static(clientDist));
+  // Catch-all: send index.html for any non-API route so React Router works
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+} else {
+  app.get('/', (req, res) => res.json({ message: '🎨 Artory API Running' }));
+}
 
 // Global Error Handler Middleware
 app.use(errorHandler);
